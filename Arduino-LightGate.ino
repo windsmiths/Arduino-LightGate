@@ -62,19 +62,19 @@ void set_PWM1_kHz(float kHz, float duty_cycle, bool enableA, bool enableB) {
   // Set On time for output B
   OCR1B = ocr;
   // set output controls A nd B with non-inverting mode
-  TCCR1A |= (1 << COM1A1) | (1 << COM1B1);
+  TCCR1A |= _BV(COM1A1) | _BV(COM1B1);
   // set Fast PWM mode using ICR1 as TOP
-  TCCR1A |= (1 << WGM11);
-  TCCR1B |= (1 << WGM12) | (1 << WGM13);
+  TCCR1A |= _BV(WGM11);
+  TCCR1B |= _BV(WGM12) | _BV(WGM13);
   // START the timer with no prescaler or 1024 prescaler
-  TCCR1B |= (1 << CS10) | (cs12 << CS12);
+  TCCR1B |= _BV(CS10) | (cs12 << CS12);
   // enable all interrupts
   interrupts();
   // Enables outputs
   if (enableA)
-    DDRB |= (1 << DDB1);
+    DDRB |= _BV(DDB1);
   if (enableB)
-    DDRB |= (1 << DDB2);
+    DDRB |= _BV(DDB2);
   // output debug info if required
   // Serial.println(top);
   // Serial.println(ocr);
@@ -117,7 +117,7 @@ void setup() {
   for (int i = 0; i < no_of_timers; i++) {
     pinMode(indicatorLEDs[i], OUTPUT);
     pinMode(gateLEDs[i], OUTPUT);
-    pinMode(interruptPins[i], INPUT);
+    pinMode(interruptPins[i], INPUT_PULLUP);
     int state = digitalRead(interruptPins[i]);
     digitalWrite(indicatorLEDs[i], state);
     timer_time_prev_start[i] = startup_micros;
