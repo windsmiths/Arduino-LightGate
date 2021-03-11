@@ -30,6 +30,7 @@ struct TimerEvent {
 // Globals...
 volatile unsigned long timer_time_start[no_of_timers];
 volatile unsigned long timer_time_prev_start[no_of_timers];
+volatile bool timer_invert[no_of_timers] = {false, true};
 unsigned long startup_micros;
 RingBuf<TimerEvent, event_buffer_length> my_buffer;
 
@@ -94,7 +95,10 @@ void state_change(int timer) {
   // Get the index for the timers
   int i = timer - 1;
   // Read the state and mimic on the indicators LED
-  int state = !digitalRead(interruptPins[i]);
+  int state = digitalRead(interruptPins[i]);
+  if(timer_invert[i]){
+    state = !state;
+  }
   digitalWrite(indicatorLEDs[i], state);
   // Deal with interrupt...
   if (state == HIGH) {
