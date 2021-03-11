@@ -1,5 +1,6 @@
 #include <RingBuf.h>
 #include <limits.h>
+#include <LiquidCrystal.h>
 
 // Constants...
 const byte no_of_timers = 2;
@@ -11,6 +12,11 @@ const float ir_duty_cycle = 0.1; // 0.1 seems to work well...
 const byte interruptPins[no_of_timers] = {2, 3};
 const byte indicatorLEDs[no_of_timers] = {4, 5};
 const byte gateLEDs[no_of_timers] = {9, 10};
+
+// initialize the LiquidCrystal library by associating any needed LCD interface pins
+// with the arduino pin number it is connected to
+const int rs = 6, en = 7, d4 = 8, d5 = 11, d6 = 12, d7 = 13;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 // Structures...
 struct TimerEvent {
@@ -28,12 +34,12 @@ unsigned long startup_micros;
 RingBuf<TimerEvent, event_buffer_length> my_buffer;
 
 // Utility functions...
-double delta_micros(unsigned long start_micros, unsigned long end_micros) {
+float delta_micros(unsigned long start_micros, unsigned long end_micros) {
   if (end_micros >= start_micros) {
-    return ((double)(end_micros - start_micros)) / 1e6;
+    return ((float)(end_micros - start_micros)) / 1e6;
   } else {
     unsigned long delta1 = ULONG_MAX - start_micros;
-    return ((double)(delta1 + 1 + end_micros)) / 1e6;
+    return ((float)(delta1 + 1 + end_micros)) / 1e6;
   }
 }
 
@@ -113,6 +119,8 @@ void setup() {
   Serial.begin(9600);
   // Note start time
   startup_micros = micros();
+  // set up the LCD's number of columns and rows:
+  lcd.begin(16, 2);
   // setup pins and variables...
   for (int i = 0; i < no_of_timers; i++) {
     pinMode(indicatorLEDs[i], OUTPUT);
@@ -134,7 +142,7 @@ void setup() {
 // Run...
 void loop() {
   struct TimerEvent event;
-  double start, duration,period, delta;
+  float start, duration,period, delta;
   if (my_buffer.pop(event)) {
     start = delta_micros(startup_micros, event.micros_start);
     duration = delta_micros(event.micros_start, event.micros_end);
@@ -146,5 +154,15 @@ void loop() {
     Serial.print(", "); Serial.print(period, 6);
     Serial.print(", "); Serial.print(delta, 6);        
     Serial.print(", "); Serial.print(duration, 6);
+    // output to LCD - 1:Period,Duration
+    //                 2:Delta,Duration
+    lcd.setCursor(0, event.timer_ - 1);
+    lcd.print(event.timer_); lcd.print(":");
+    if(event.timer_ == 1){
+      lcd.print(period,3);
+    } else {
+      lcd.print(delta,3);
+    }
+    lcd.print(",");lcd.print(duration,3);lcd.print("   ");
   }
 }
