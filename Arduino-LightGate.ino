@@ -11,7 +11,6 @@
   LiquidCrystal display(rs, en, d4, d5, d6, d7);
 #endif
 #if DISPLAY_TYPE == 'OLEDI2C'
-  #include <Adafruit_GFX.h>
   #include <Adafruit_SH1106.h>
   Adafruit_SH1106 display(0);
 #endif
@@ -140,7 +139,7 @@ void setup() {
   #if DISPLAY_TYPE == 'OLEDI2C'  
     display.begin(SH1106_SWITCHCAPVCC, 0x3C);
     display.setTextSize(1.5);
-    display.setTextColor(WHITE);    
+    display.setTextColor(WHITE, BLACK);    
     display.clearDisplay();
     display.display();
   #endif  
@@ -180,8 +179,13 @@ void loop() {
     Serial.print(", "); Serial.print(60.0 / period, 6);
     // output to LCD - 1:Period,Duration
     //                 2:Delta,Duration
-    display.clearDisplay();
-    display.setCursor(0, event.timer_ - 1);
+    int delta_x = 1;
+    int delta_y = 1;
+    #if DISPLAY_TYPE == 'OLEDI2C'
+      delta_x = 20;
+      delta_y = 16;
+    #endif
+    display.setCursor(0, delta_y * (event.timer_ - 1) );
     display.print(event.timer_); display.print(":");
     if(event.timer_ == 1){
       display.print(period,3);
@@ -189,6 +193,13 @@ void loop() {
       display.print(delta,3);
     }
     display.print(",");display.print(duration,3);display.print("   ");  
+    #if DISPLAY_TYPE == 'OLEDI2C'
+      display.setCursor(0, delta_y * (1 + event.timer_) );
+      display.print(event.timer_); display.print(":");
+      display.print(60.0 / period, 3);
+      display.print(" rpm       ");
+    #endif
     display.display();
+
   }
 }
