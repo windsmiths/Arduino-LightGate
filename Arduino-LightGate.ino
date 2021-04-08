@@ -1,22 +1,32 @@
+#define DISPLAY_TYPE 'OLEDI2C'
+
 #include <RingBuf.h>
 #include <limits.h>
-#include <LiquidCrystal.h>
+
+#if DISPLAY_TYPE == 'LCD'
+  #include <LiquidCrystal.h>
+  // initialize the LiquidCrystal library by associating any needed LCD interface pins
+  // with the arduino pin number it is connected to
+  const int rs = 6, en = 7, d4 = 8, d5 = 11, d6 = 12, d7 = 13;
+  LiquidCrystal display(rs, en, d4, d5, d6, d7);
+#endif
+#if DISPLAY_TYPE == 'OLEDI2C'
+  #include <Adafruit_GFX.h>
+  #include <Adafruit_SH1106.h>
+  Adafruit_SH1106 display(0);
+#endif
 
 // Constants...
 const byte no_of_timers = 2;
 const byte event_buffer_length = 10;
 const float ir_kHz = 38;
-const float ir_duty_cycle = 0.1; // 0.1 seems to work well...
+const float ir_duty_cycle = 0.05; // 0.05 seems to work well...
 
 // Pin Mappings for Maker Nano
 const byte interruptPins[no_of_timers] = {2, 3};
 const byte indicatorLEDs[no_of_timers] = {4, 5};
 const byte gateLEDs[no_of_timers] = {9, 10};
 
-// initialize the LiquidCrystal library by associating any needed LCD interface pins
-// with the arduino pin number it is connected to
-const int rs = 6, en = 7, d4 = 8, d5 = 11, d6 = 12, d7 = 13;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 // Structures...
 struct TimerEvent {
@@ -120,11 +130,20 @@ void timer2() { state_change(2); }
 // Initialise...
 void setup() {
   // Initialise serial port
-  Serial.begin(9600);
+  Serial.begin(115200);
   // Note start time
   startup_micros = micros();
-  // set up the LCD's number of columns and rows:
-  lcd.begin(16, 2);
+  #if DISPLAY_TYPE == 'LCD'
+    // set up the LCD's number of columns and rows:
+    display.begin(16, 2);
+  #endif
+  #if DISPLAY_TYPE == 'OLEDI2C'  
+    display.begin(SH1106_SWITCHCAPVCC, 0x3C);
+    display.setTextSize(1.5);
+    display.setTextColor(WHITE);    
+    display.clearDisplay();
+    display.display();
+  #endif  
   // setup pins and variables...
   for (int i = 0; i < no_of_timers; i++) {
     pinMode(indicatorLEDs[i], OUTPUT);
@@ -158,15 +177,18 @@ void loop() {
     Serial.print(", "); Serial.print(period, 6);
     Serial.print(", "); Serial.print(delta, 6);        
     Serial.print(", "); Serial.print(duration, 6);
+    Serial.print(", "); Serial.print(60.0 / period, 6);
     // output to LCD - 1:Period,Duration
     //                 2:Delta,Duration
-    lcd.setCursor(0, event.timer_ - 1);
-    lcd.print(event.timer_); lcd.print(":");
+    display.clearDisplay();
+    display.setCursor(0, event.timer_ - 1);
+    display.print(event.timer_); display.print(":");
     if(event.timer_ == 1){
-      lcd.print(period,3);
+      display.print(period,3);
     } else {
-      lcd.print(delta,3);
+      display.print(delta,3);
     }
-    lcd.print(",");lcd.print(duration,3);lcd.print("   ");
+    display.print(",");display.print(duration,3);display.print("   ");  
+    display.display();
   }
 }
