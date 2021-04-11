@@ -131,15 +131,13 @@ void timer2() { state_change(2); }
 void setup() {
   // Initialise serial port
   Serial.begin(115200);
-  // Note start time
-  startup_micros = micros();
   #if DISPLAY_TYPE == 'LCD'
     // set up the LCD's number of columns and rows:
     display.begin(16, 2);
   #endif
   #if DISPLAY_TYPE == 'OLEDI2C'  
     display.begin(SH1106_SWITCHCAPVCC, 0x3C);
-    display.setTextSize(1.5);
+    display.setTextSize(1);
     display.setTextColor(WHITE, BLACK);    
     display.clearDisplay();
     display.display();
@@ -159,6 +157,8 @@ void setup() {
   // We have to map the interrupt routines 'manually'
   attachInterrupt(digitalPinToInterrupt(interruptPins[0]), timer1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(interruptPins[1]), timer2, CHANGE);
+  // Note start time
+  startup_micros = micros();  
 }
 
 void check_for_commands() {
@@ -199,8 +199,8 @@ void loop() {
     int delta_x = 1;
     int delta_y = 1;
     #if DISPLAY_TYPE == 'OLEDI2C'
-      delta_x = 20;
-      delta_y = 16;
+      delta_x = 8;
+      delta_y = 12;
     #endif
     display.setCursor(0, delta_y * (event.timer_ - 1) );
     display.print(event.timer_); display.print(":");
