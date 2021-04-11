@@ -42,6 +42,7 @@ volatile unsigned long timer_time_prev_start[no_of_timers];
 volatile bool timer_invert[no_of_timers] = {false, true};
 unsigned long startup_micros;
 RingBuf<TimerEvent, event_buffer_length> my_buffer;
+bool log_to_serial = false;
 
 // Utility functions...
 float delta_micros(unsigned long start_micros, unsigned long end_micros) {
@@ -158,7 +159,17 @@ void setup() {
   // We have to map the interrupt routines 'manually'
   attachInterrupt(digitalPinToInterrupt(interruptPins[0]), timer1, CHANGE);
   attachInterrupt(digitalPinToInterrupt(interruptPins[1]), timer2, CHANGE);
+}
 
+void check_for_commands() {
+    if (Serial.available() > 0) {
+        char receivedChar = Serial.read();
+        switch(tolower(receivedChar)){
+          case 's':
+            log_to_serial = !log_to_serial;
+            break;
+        };
+    }
 }
 
 // Run...
@@ -170,13 +181,15 @@ void loop() {
     duration = delta_micros(event.micros_start, event.micros_end);
     period = delta_micros(event.micros_prev_start, event.micros_start);
     delta = delta_micros(event.micros_timer0_start, event.micros_start);
-    Serial.println();
-    Serial.print(", "); Serial.print(event.timer_);
-    Serial.print(", "); Serial.print(start, 6);
-    Serial.print(", "); Serial.print(period, 6);
-    Serial.print(", "); Serial.print(delta, 6);        
-    Serial.print(", "); Serial.print(duration, 6);
-    Serial.print(", "); Serial.print(60.0 / period, 6);
+    if (log_to_serial){
+      Serial.println();
+      Serial.print(", "); Serial.print(event.timer_);
+      Serial.print(", "); Serial.print(start, 6);
+      Serial.print(", "); Serial.print(period, 6);
+      Serial.print(", "); Serial.print(delta, 6);        
+      Serial.print(", "); Serial.print(duration, 6);
+      Serial.print(", "); Serial.print(60.0 / period, 6);
+    }
     // output to LCD - 1:Period,Duration
     //                 2:Delta,Duration
     int delta_x = 1;
@@ -200,6 +213,8 @@ void loop() {
       display.print(" rpm       ");
     #endif
     display.display();
+    // check for commands
+    check_for_commands();
 
   }
 }
