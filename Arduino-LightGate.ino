@@ -176,6 +176,10 @@ void check_for_commands() {
 void loop() {
   struct TimerEvent event;
   float start, duration,period, delta;
+  
+  // check for commands
+  check_for_commands();
+  // check ring buffer
   if (my_buffer.pop(event)) {
     start = delta_micros(startup_micros, event.micros_start);
     duration = delta_micros(event.micros_start, event.micros_end);
@@ -213,8 +217,5 @@ void loop() {
       display.print(" rpm       ");
     #endif
     display.display();
-    // check for commands
-    check_for_commands();
-
   }
 }
