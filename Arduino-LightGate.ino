@@ -15,16 +15,25 @@
   Adafruit_SH1106 display(0);
 #endif
 
-// Constants...
-const byte no_of_timers = 2;
-const byte event_buffer_length = 10;
-const float ir_kHz = 38;
-const float ir_duty_cycle = 0.05; // 0.05 seems to work well...
+// Constants/defines...
+#define no_of_timers 2
+#define event_buffer_length 5
+#define ir_kHz 38
+#define ir_duty_cycle 0.05 // 0.05 seems to work well...
+#define MODE_TIMER 0
+#define MODE_HZ 1
+#define MODE_RPM 2 
+#define SECONDS "s"
+#define HZ "Hz"
+#define RPM "rpm"
+#define LOG_DECIMALS 6
+#define DISP_DECIMALS 3
 
 // Pin Mappings for Maker Nano
 const byte interruptPins[no_of_timers] = {2, 3};
 const byte indicatorLEDs[no_of_timers] = {4, 5};
 const byte gateLEDs[no_of_timers] = {9, 10};
+#define RESET_PIN 6
 
 
 // Structures...
@@ -43,6 +52,13 @@ volatile bool timer_invert[no_of_timers] = {false, true};
 unsigned long startup_micros;
 RingBuf<TimerEvent, event_buffer_length> my_buffer;
 bool log_to_serial = false;
+byte mode = MODE_RPM;
+bool clear_display = false;
+byte no_of_readings[no_of_timers];
+float period_max[no_of_timers];
+float period_min[no_of_timers];
+float period_sum[no_of_timers];
+unsigned int period_count[no_of_timers];
 
 // Utility functions...
 float delta_micros(unsigned long start_micros, unsigned long end_micros) {
@@ -131,6 +147,7 @@ void timer2() { state_change(2); }
 void setup() {
   // Initialise serial port
   Serial.begin(115200);
+  pinMode(RESET_PIN, INPUT_PULLUP);
   #if DISPLAY_TYPE == 'LCD'
     // set up the LCD's number of columns and rows:
     display.begin(16, 2);
@@ -139,9 +156,11 @@ void setup() {
     display.begin(SH1106_SWITCHCAPVCC, 0x3C);
     display.setTextSize(1);
     display.setTextColor(WHITE, BLACK);    
+    display.setTextWrap(false);
     display.clearDisplay();
     display.display();
   #endif  
+  set_mode();
   // setup pins and variables...
   for (int i = 0; i < no_of_timers; i++) {
     pinMode(indicatorLEDs[i], OUTPUT);
@@ -159,6 +178,51 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(interruptPins[1]), timer2, CHANGE);
   // Note start time
   startup_micros = micros();  
+  my_buffer.clear();
+  reset_counters();
+}
+
+void reset_counters() {
+  for (int i = 0; i < no_of_timers; i++) {
+    period_max[i] = 0;
+    period_min[i] = INFINITY;
+    period_sum[i] = 0;
+    period_count[i] = 0;
+    no_of_readings[i] = 0;
+  }
+}
+
+void update_counter(int timer, float period) {
+  int i = timer - 1;  
+  if (period > 0) {
+    if (no_of_readings[i] > 1) {
+      period_max[i] = fmaxf(period_max[i], period);
+      period_min[i] = fminf(period_min[i], period);
+      period_sum[i] += period;
+      period_count[i]++;
+    } else {
+      no_of_readings[i]++;
+    }      
+  }
+}
+
+void set_mode() {
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  switch (mode) {
+    case MODE_TIMER:
+      display.print("Timer Mode...");
+      break;
+    case MODE_HZ:
+      display.print("Frequency Mode (Hz)...");
+      break;              
+    case MODE_RPM:
+      display.print("Frequency Mode (rpm)...");
+      break;               
+  }
+  display.display();
+  delay(500);
+  clear_display = true;
 }
 
 void check_for_commands() {
@@ -168,31 +232,64 @@ void check_for_commands() {
           case 's':
             log_to_serial = !log_to_serial;
             break;
+          case 'm':
+            mode++;
+            if (mode > MODE_RPM) mode = 0;
+            set_mode();
+            break;
+          case 'r':
+            reset_counters();
+            set_mode();
+            break;          
         };
     }
+}
+
+void display_units(){
+  switch (mode) {
+    case MODE_TIMER:
+      display.print(SECONDS);
+      break;
+    case MODE_HZ:
+      display.print(HZ);
+      break;              
+    case MODE_RPM:
+      display.print(RPM);
+      break;               
+  }  
 }
 
 // Run...
 void loop() {
   struct TimerEvent event;
-  float start, duration,period, delta;
-  
+  float start, duration,period, delta, hz;
+  float value, mean, range;
+  int i;
+
   // check for commands
   check_for_commands();
+  if (!digitalRead(RESET_PIN)){
+    reset_counters();
+    set_mode();
+  }
   // check ring buffer
   if (my_buffer.pop(event)) {
+    i = event.timer_ - 1;
     start = delta_micros(startup_micros, event.micros_start);
     duration = delta_micros(event.micros_start, event.micros_end);
     period = delta_micros(event.micros_prev_start, event.micros_start);
     delta = delta_micros(event.micros_timer0_start, event.micros_start);
+    hz = 1.0 / period;
+    update_counter(event.timer_, period);
     if (log_to_serial){
       Serial.println();
       Serial.print(", "); Serial.print(event.timer_);
-      Serial.print(", "); Serial.print(start, 6);
-      Serial.print(", "); Serial.print(period, 6);
-      Serial.print(", "); Serial.print(delta, 6);        
-      Serial.print(", "); Serial.print(duration, 6);
-      Serial.print(", "); Serial.print(60.0 / period, 6);
+      Serial.print(", "); Serial.print(start, LOG_DECIMALS);
+      Serial.print(", "); Serial.print(period, LOG_DECIMALS);
+      Serial.print(", "); Serial.print(delta, LOG_DECIMALS);        
+      Serial.print(", "); Serial.print(duration, LOG_DECIMALS);
+      Serial.print(", "); Serial.print(hz, LOG_DECIMALS);
+      Serial.print(", "); Serial.print(60.0 * hz, LOG_DECIMALS);
     }
     // output to LCD - 1:Period,Duration
     //                 2:Delta,Duration
@@ -202,20 +299,46 @@ void loop() {
       delta_x = 8;
       delta_y = 12;
     #endif
-    display.setCursor(0, delta_y * (event.timer_ - 1) );
-    display.print(event.timer_); display.print(":");
-    if(event.timer_ == 1){
-      display.print(period,3);
-    } else {
-      display.print(delta,3);
+    if (clear_display) {
+      display.clearDisplay();
+      clear_display = false;
     }
-    display.print(",");display.print(duration,3);display.print("   ");  
-    #if DISPLAY_TYPE == 'OLEDI2C'
-      display.setCursor(0, delta_y * (1 + event.timer_) );
-      display.print(event.timer_); display.print(":");
-      display.print(60.0 / period, 3);
-      display.print(" rpm       ");
-    #endif
+    display.setCursor(0, delta_y * i );
+    display.print(event.timer_); display.print(":");
+    switch(mode){
+      case MODE_TIMER:
+        if(event.timer_ == 1){
+          display.print(period, DISP_DECIMALS);
+        } else {
+          display.print(delta, DISP_DECIMALS);
+        }
+        display.print(",");display.print(duration, DISP_DECIMALS);
+        display.print(SECONDS);  display.print("   ");
+        break;  
+      case MODE_HZ:
+      case MODE_RPM:
+        value = hz;
+        mean = period_count[i] / period_sum[i];      
+        range = 1.0 / period_min[i] - 1.0 / period_max[i];     
+        if (mode == MODE_RPM) {
+          value = 60 * value;
+          mean = 60 * mean;      
+          range = 60 * range;
+        }
+        display.print(value, DISP_DECIMALS); 
+        display.print(" "); display_units(); 
+        display.print("        ");
+        #if DISPLAY_TYPE == 'OLEDI2C'
+          display.setCursor(0, delta_y * (1 + event.timer_) );
+          display.print(event.timer_); display.print(":");
+          display.print(mean, DISP_DECIMALS);
+          display.print(","); display.print(range, DISP_DECIMALS);
+          display.print(" "); display_units(); 
+          display.print("        ");
+        #endif         
+        break;
+        
+    }
     display.display();
   }
 }
